@@ -1,6 +1,6 @@
 {
   "name": "evergreen",
-  "description": "Easily get the evergreen CLI up and running.",
+  "description": "Dead simple way to use Evergreen, MongoDB's Continuous Build Platform.",
   "version": "0.0.0",
   "evergreen": {
     "client": {
