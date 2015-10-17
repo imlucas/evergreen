@@ -28,37 +28,40 @@ describe('evergreen', function() {
 
     describe('download', function() {
       it('should download the binary for `darwin`', function(done) {
+        var binary = path.join(evergreen.client.dest, 'evergreen');
         evergreen.client.download('darwin', function(err) {
           if (err) {
             return done(err);
           }
-          fs.exists(path.join(evergreen.client.dest, 'evergreen'), function(exists) {
+          fs.exists(binary, function(exists) {
             assert(exists);
-            fs.unlink(done);
+            fs.unlink(binary, done);
           });
         });
       });
       it('should download the binary for `linux`', function(done) {
+        var binary = path.join(evergreen.client.dest, 'evergreen');
         evergreen.client.download('linux', function(err) {
           if (err) {
             return done(err);
           }
 
-          fs.exists(path.join(evergreen.client.dest, 'evergreen'), function(exists) {
+          fs.exists(binary, function(exists) {
             assert(exists);
-            fs.unlink(done);
+            fs.unlink(binary, done);
           });
         });
       });
       it('should download the binary for `win32`', function(done) {
+        var binary = path.join(evergreen.client.dest, 'evergreen.exe');
         evergreen.client.download('win32', function(err) {
           if (err) {
             return done(err);
           }
 
-          fs.exists(path.join(evergreen.client.dest, 'evergreen.exe'), function(exists) {
+          fs.exists(binary, function(exists) {
             assert(exists);
-            fs.unlink(done);
+            fs.unlink(binary, done);
           });
         });
       });
