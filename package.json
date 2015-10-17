@@ -1,7 +1,7 @@
 {
   "name": "evergreen",
   "description": "Dead simple way to use Evergreen, MongoDB's Continuous Build Platform.",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "evergreen": {
     "client": {
       "sha": "3010ffda7d09fe404360d6d59dc764bfcf784a59",
