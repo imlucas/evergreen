@@ -24,9 +24,11 @@
     "url": "git://github.com/mongodb-js/evergreen.git"
   },
   "dependencies": {
+    "bluebird": "^3.3.5",
     "debug": "^2.2.0",
     "download": "^4.3.0",
     "mkdirp": "^0.5.1",
+    "mongodb-js-cli": "0.0.3",
     "opn": "^3.0.2",
     "run-series": "^1.1.4",
     "untildify": "^2.1.0"

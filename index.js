@@ -1,15 +1,22 @@
-/* eslint no-sync:0 */
-var format = require('util').format;
-var path = require('path');
-var fs = require('fs');
-var untildify = require('untildify');
-var mkdirp = require('mkdirp');
-var Download = require('download');
-var series = require('run-series');
-var pkg = require('./package.json');
-var debug = require('debug')('evergreen');
+'use strict';
 
-function normalize(platform) {
+/* eslint no-sync:0 */
+const Promise = require('bluebird');
+const path = require('path');
+const exists = (src) => {
+  return new Promise((resolve) => {
+    require('fs').exists(src, resolve);
+  });
+};
+
+const existsSync = require('fs').existsSync;
+const untildify = require('untildify');
+const mkdirp = Promise.promisify(require('mkdirp'));
+const Download = require('download');
+const pkg = require('./package.json');
+const debug = require('debug')('evergreen');
+
+let normalize = (platform) => {
   if (!platform) {
     platform = process.platform;
   }
@@ -22,20 +29,20 @@ function normalize(platform) {
     platform = 'ubuntu';
   }
   return platform;
-}
+};
 
-function bin(name, platform) {
+let bin = (name, platform) => {
   if (platform === 'windows_64') {
     return name + '.exe';
   }
   return name;
-}
+};
 
 exports = {
   client: {}
 };
 
-exports.client._dest = function() {
+exports.client._dest = () => {
   if (process.env.EVERGREEN_CLIENT_DEST) {
     return untildify(process.env.EVERGREEN_CLIENT_DEST);
   }
@@ -44,8 +51,8 @@ exports.client._dest = function() {
     return path.join(__dirname, '.evergreen');
   }
 
-  var pkgDirectory = path.join(process.cwd(), 'node_modules', pkg.name);
-  var isLocal = fs.existsSync(pkgDirectory);
+  const pkgDirectory = path.join(process.cwd(), 'node_modules', pkg.name);
+  const isLocal = existsSync(pkgDirectory);
   if (!isLocal) {
     // We're installed globally so keep artifacts at the user level.
     return untildify('~/.evergreen');
@@ -69,7 +76,7 @@ debug('client binaries will be downloaded to `%s`', exports.client.dest);
  * The current version of the evergreen client.
  * @api public
  */
-exports.client.version = format('%s_%s', pkg.evergreen.client.sha, pkg.evergreen.client.timestamp);
+exports.client.version = `${pkg.evergreen.client.sha}_${pkg.evergreen.client.timestamp}`;
 debug('client version is `%s`', exports.client.version);
 
 /**
@@ -81,43 +88,40 @@ debug('client version is `%s`', exports.client.version);
  * @return {String} - The URL
  * @api public
  */
-exports.client.url = function(platform, version) {
-  platform = normalize(platform);
-  version = version || exports.version;
+exports.client.url = (platform, version) => {
+  version = version || exports.client.version;
 
-  return format('https://s3.amazonaws.com/mciuploads/mci/cli/mci_%s_client_%s/%s',
-    platform, exports.client.version, bin('evergreen', platform));
+  return `https://s3.amazonaws.com/mciuploads/mci/cli/mci_`
+    + `${normalize(platform)}_client_${version}/${bin('evergreen', normalize(platform))}`;
 };
 
-exports.client.binary = path.join(exports.client.dest, bin('evergreen',
-  normalize(process.platform)));
-debug('client binary will be located at `%s`', exports.client.binary);
+exports.client.binary = path.join(exports.client.dest,
+  bin('evergreen', normalize(process.platform)));
+debug(`client binary will be located at ${exports.client.binary}`);
 
 
-function downloadIfNeeded(options, done) {
+function downloadIfNeeded(options) {
   debug('checking if download needed', options);
-  fs.exists(options.dest, function(exists) {
-    if (exists) {
-      debug('already have `%s`', options.dest);
-      done(null, options.dest);
-      return;
-    }
-    debug('downloading `%s` to `%s`...', options.url, options.dest);
-    new Download(options)
-      .get(options.url)
-      .rename(options.filename)
-      .dest(exports.client.dest)
-      .run(function(err) {
-        if (err) {
-          debug('error while downloading:', err);
-          done(err);
-          return;
-        }
+  return exists(options.dest)
+    .then( (_exists) => {
+      if (_exists) {
+        debug(`already have ${options.dest}`);
+        return options.dest;
+      }
+      debug(`downloading ${options.url} to ${options.dest}...`);
 
-        debug('successfully downloaded `%s`', options.dest);
-        done(null, options.dest);
+      return new Promise((resolve, reject) => {
+        new Download(options)
+          .get(options.url)
+          .rename(options.filename)
+          .dest(exports.client.dest)
+          .run((err) => {
+            debug('download complete', err);
+            if (err) return reject(err);
+            resolve(options.dest);
+          });
       });
-  });
+    });
 }
 
 /**
@@ -126,34 +130,24 @@ function downloadIfNeeded(options, done) {
  * @param {String} [platform] - [Default: `process.platform`].
  * @param {String} [version] - Evergreen client version string
  *   [Default: `require('evergreen').client.version`].
- * @param {Function} done - Callback.
+ * @return {Promise}
  * @api public
  */
-exports.client.download = function(platform, version, done) {
-  if (typeof platform === 'function') {
-    done = platform;
-    platform = undefined;
-    version = undefined;
-  } else if (typeof version === 'function') {
-    done = version;
-    version = undefined;
-  }
+exports.client.download = function(platform, version) {
   platform = normalize(platform);
-  version = version || exports.version;
+  version = version || exports.client.version;
 
-  var url = exports.client.url(platform, version);
-  var filename = bin('evergreen', platform);
-  var options = {
+  const url = exports.client.url(platform, version);
+  const filename = bin('evergreen', platform);
+  const options = {
     mode: '755',
     url: url,
     filename: filename,
     dest: path.join(exports.client.dest, filename)
   };
 
-  series([
-    mkdirp.bind(null, exports.client.dest),
-    downloadIfNeeded.bind(null, options)
-  ], done);
+  return mkdirp(exports.client.dest)
+    .then(() => downloadIfNeeded(options));
 };
 
 

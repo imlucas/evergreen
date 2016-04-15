@@ -1,47 +1,30 @@
 #!/usr/bin/env node
 
+'use strict';
+
 /* eslint no-console: 0 */
-var untildify = require('untildify');
-var fs = require('fs');
-var evergreen = require('../');
-var opn = require('opn');
-var spawn = require('child_process').spawn;
-var config = untildify('~/.evergreen.yml');
-var debug = require('debug')('evergreen');
-function abortIfError(err) {
-  if (!err) return;
-  console.error(err);
-  process.exit(1);
-}
+const Promise = require('bluebird');
+const untildify = require('untildify');
+const fs = Promise.promisifyAll(require('fs'));
+const evergreen = require('../');
+const opn = Promise.promisify(require('opn'));
+const execFile = Promise.promisify(require('child_process').execFile);
+const config = untildify('~/.evergreen.yml');
+const cli = require('mongodb-js-cli')('evergreen');
 
-function setup(done) {
+let setup = () => {
   // Download client binary if need be
-  evergreen.client.download(function(err) {
-    if (err) {
-      return done(err);
-    }
-
-    fs.exists(config, function(exists) {
-      if (exists) {
-        debug('config file already exists at `%s`', config);
-        return done();
+  return evergreen.client.download()
+    .then(fs.exists(config))
+    .then( (exists) => {
+      if (!exists) {
+        // prompt like Semantic-release:
+        // It seems you havent configured evergreen yet!
+        // Press ENTER to go to open settings page on evergreen.
+        return opn('https://evergreen.mongodb.com/settings');
       }
-
-      // prompt like Semantic-release:
-      // It seems you havent configured evergreen yet!
-      // Press ENTER to go to open settings page on evergreen.
-      opn('https://evergreen.mongodb.com/settings', function() {
-        // prompt:
-        // copy and paste the contents of "Authentication" textarea
-        // here and press ENTER to continue
-
-        // Write pasted text to ~/.evergreen.yml
-
-        done();
-      });
     });
-  });
-}
+};
 
 // @todo (imlucas): https://github.com/imlucas/mci-trigger/ could be really helpful here :)
 // @todo (imlucas): When `mongodb-js-ci` successfully completes a run,
@@ -62,13 +45,21 @@ function setup(done) {
 // ```
 // @todo (imlucas): Wrap client binary calls so output is pretty and actually useful,
 // e.g. `WHY IS IT SO HARD TO ADD HUMAN OPTIONS LIKE --open?`
-setup(function(err) {
-  abortIfError(err);
+setup()
+  .then( () => execFile(evergreen.client.binary, process.argv.slice(2), {stdio: 'inherit'}))
+  .then( (stdout) => {
+    let msg = stdout.toString('utf-8');
 
-  var child = spawn(evergreen.client.binary, process.argv.slice(2), {
-    stdio: 'inherit'
-  });
-  child.on('close', function(code) {
-    process.exit(code);
-  });
-});
+    cli.debug(`execFile stdout is:\n${msg}`);
+    let m = new RegExp('Link \: https\:\/\/evergreen.mongodb.com\/patch\/(.*)').exec(msg);
+
+    if (!m) return null;
+
+    let _id = m[1];
+    cli.debug(`extracted patch _id ${_id}`);
+    const url = `https://evergreen.mongodb.com/version/${_id}_0`;
+
+    cli.debug(`opening url ${url}`);
+    return opn(url);
+  })
+  .catch(cli.abortIfError.bind(cli));

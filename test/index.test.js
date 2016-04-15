@@ -1,4 +1,5 @@
 'use strict';
+/* eslint no-sync: 0 */
 
 const evergreen = require('../');
 const assert = require('assert');
@@ -29,48 +30,31 @@ describe('evergreen', () => {
     });
 
     describe('download', () => {
-      it('should download the binary for `darwin`', (done) => {
+      it('should download the binary for `darwin`', () => {
         var binary = path.join(evergreen.client.dest, 'evergreen');
-        evergreen.client.download('darwin', (err) => {
-          if (err) {
-            return done(err);
-          }
-          fs.exists(binary, function(exists) {
-            assert(exists);
-            fs.unlink(binary, done);
-          });
+        return evergreen.client.download('darwin').then( () => {
+          assert(fs.existsSync(binary));
+          fs.unlinkSync(binary);
         });
       });
-      it('should download the binary for `linux`', (done) => {
+      it('should download the binary for `linux`', () => {
         if (process.env.TRAVIS) {
           return this.skip();
         }
         var binary = path.join(evergreen.client.dest, 'evergreen');
-        evergreen.client.download('linux', (err) => {
-          if (err) {
-            return done(err);
-          }
-
-          fs.exists(binary, function(exists) {
-            assert(exists);
-            fs.unlink(binary, done);
-          });
+        return evergreen.client.download('linux').then( () => {
+          assert(fs.existsSync(binary));
+          fs.unlinkSync(binary);
         });
       });
-      it('should download the binary for `win32`', (done) => {
+      it('should download the binary for `win32`', () => {
         if (process.env.TRAVIS) {
           return this.skip();
         }
         var binary = path.join(evergreen.client.dest, 'evergreen.exe');
-        evergreen.client.download('win32', (err) => {
-          if (err) {
-            return done(err);
-          }
-
-          fs.exists(binary, function(exists) {
-            assert(exists);
-            fs.unlink(binary, done);
-          });
+        return evergreen.client.download('win32').then( () => {
+          assert(fs.existsSync(binary));
+          fs.unlinkSync(binary);
         });
       });
     });
