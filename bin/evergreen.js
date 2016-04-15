@@ -7,7 +7,7 @@ const Promise = require('bluebird');
 const untildify = require('untildify');
 const fs = Promise.promisifyAll(require('fs'));
 const evergreen = require('../');
-const opn = Promise.promisify(require('opn'));
+const opn = require('opn');
 const execFile = Promise.promisify(require('child_process').execFile);
 const config = untildify('~/.evergreen.yml');
 const cli = require('mongodb-js-cli')('evergreen');
@@ -21,7 +21,7 @@ let setup = () => {
         // prompt like Semantic-release:
         // It seems you havent configured evergreen yet!
         // Press ENTER to go to open settings page on evergreen.
-        return opn('https://evergreen.mongodb.com/settings');
+        opn('https://evergreen.mongodb.com/settings');
       }
     });
 };
@@ -60,6 +60,6 @@ setup()
     const url = `https://evergreen.mongodb.com/version/${_id}_0`;
 
     cli.debug(`opening url ${url}`);
-    return opn(url);
+    opn(url);
   })
   .catch(cli.abortIfError.bind(cli));
