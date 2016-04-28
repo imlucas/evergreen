@@ -57,7 +57,7 @@ setup()
 
     let _id = m[1];
     cli.debug(`extracted patch _id ${_id}`);
-    const url = `https://evergreen.mongodb.com/version/${_id}_0`;
+    const url = `https://evergreen.mongodb.com/version/${_id}`;
 
     cli.debug(`opening url ${url}`);
     opn(url);
