@@ -38,9 +38,9 @@ describe('evergreen', () => {
         });
       });
       it('should download the binary for `linux`', () => {
-        if (process.env.TRAVIS) {
-          return this.skip();
-        }
+        // if (process.env.TRAVIS) {
+        //   return this.skip();
+        // }
         var binary = path.join(evergreen.client.dest, 'evergreen');
         return evergreen.client.download('linux').then( () => {
           assert(fs.existsSync(binary));
@@ -48,9 +48,9 @@ describe('evergreen', () => {
         });
       });
       it('should download the binary for `win32`', () => {
-        if (process.env.TRAVIS) {
-          return this.skip();
-        }
+        // if (process.env.TRAVIS) {
+        //   return this.skip();
+        // }
         var binary = path.join(evergreen.client.dest, 'evergreen.exe');
         return evergreen.client.download('win32').then( () => {
           assert(fs.existsSync(binary));
