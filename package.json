@@ -26,16 +26,16 @@
   "dependencies": {
     "bluebird": "^3.3.5",
     "debug": "^2.2.0",
-    "download": "^4.3.0",
+    "download": "^5.0.2",
     "mkdirp": "^0.5.1",
     "mongodb-js-cli": "0.0.3",
-    "opn": "^3.0.2",
+    "opn": "^4.0.2",
     "run-series": "^1.1.4",
-    "untildify": "^2.1.0"
+    "untildify": "^3.0.2"
   },
   "devDependencies": {
-    "eslint-config-mongodb-js": "^1.0.3",
-    "mocha": "^2.3.3",
+    "eslint-config-mongodb-js": "^2.2.0",
+    "mocha": "^3.1.2",
     "mongodb-js-fmt": "0.0.3",
     "mongodb-js-precommit": "^0.2.2",
     "pre-commit": "^1.1.1"
