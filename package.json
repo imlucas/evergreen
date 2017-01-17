@@ -3,7 +3,7 @@
   "description": "Dead simple way to use Evergreen, MongoDB's Continuous Build Platform.",
   "version": "0.3.2",
   "evergreen": {
-    "client": {
+    "cli": {
       "sha": "56310520e80db964c0bfe0b3f0bb81f0f6238f67",
       "timestamp": "16_02_16_00_59_07"
     }
@@ -13,7 +13,7 @@
     "check": "mongodb-js-precommit",
     "test": "mocha",
     "ci": "npm run check && npm test",
-    "postinstall": "bin/evergreen-install-client.js"
+    "postinstall": "bin/evergreen-install-cli.js"
   },
   "bin": {
     "evergreen": "bin/evergreen.js"
@@ -26,10 +26,11 @@
   "dependencies": {
     "bluebird": "^3.3.5",
     "debug": "^2.2.0",
-    "download": "^4.3.0",
+    "download": "^5.0.2",
     "mkdirp": "^0.5.1",
     "mongodb-js-cli": "0.0.3",
     "opn": "^3.0.2",
+    "pify": "^2.3.0",
     "run-series": "^1.1.4",
     "untildify": "^2.1.0"
   },

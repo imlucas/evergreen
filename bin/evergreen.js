@@ -1,65 +1,64 @@
 #!/usr/bin/env node
 
-'use strict';
+const fs = require('fs');
+const pify = require('pify');
+const exists = pify(fs.exists);
 
-/* eslint no-console: 0 */
-const Promise = require('bluebird');
-const untildify = require('untildify');
-const fs = Promise.promisifyAll(require('fs'));
-const evergreen = require('../');
 const opn = require('opn');
-const execFile = Promise.promisify(require('child_process').execFile);
-const config = untildify('~/.evergreen.yml');
 const cli = require('mongodb-js-cli')('evergreen');
 
-let setup = () => {
+const evergreen = require('../');
+
+function setup() {
   // Download client binary if need be
-  return evergreen.client.download()
-    .then(fs.exists(config))
-    .then( (exists) => {
-      if (!exists) {
-        // prompt like Semantic-release:
-        // It seems you havent configured evergreen yet!
-        // Press ENTER to go to open settings page on evergreen.
+  return evergreen.downloadCliBinary()
+    .then(exists(evergreen.CONFIG_PATH))
+    .then((_exists) => {
+      cli.debug('Evergreen config file exists at %s? %s', evergreen.CONFIG_PATH, _exists);
+      if (!_exists) {
+        /**
+         * TODO (imlucas) prompt like Semantic-release.
+         * "Press ENTER to go to open settings page on evergreen."
+         */
+        cli.info('It seems you havent configured evergreen yet!');
         opn('https://evergreen.mongodb.com/settings');
       }
     });
-};
+}
 
-// @todo (imlucas): https://github.com/imlucas/mci-trigger/ could be really helpful here :)
-// @todo (imlucas): When `mongodb-js-ci` successfully completes a run,
-// if `process.env.TRAVIS` and `exists(`pwd`/.evergreen.yml)`,
-// submit a new a patch build for this project:
-// evergreen patch --project=#{detect project name} --yes --finalize\
-//   --description="#{most recent commit message}" --variants=all
-//
-// @todo (imlucas): Support reading from package.json ->
-// autogenerating `.evergreen.yml` for project:
-//
-// ```json
-// {
-// "evergreen": {
-//     "project": "scout-server"
-//   }
-// }
-// ```
-// @todo (imlucas): Wrap client binary calls so output is pretty and actually useful,
-// e.g. `WHY IS IT SO HARD TO ADD HUMAN OPTIONS LIKE --open?`
-setup()
-  .then( () => execFile(evergreen.client.binary, process.argv.slice(2), {stdio: 'inherit'}))
-  .then( (stdout) => {
-    let msg = stdout.toString('utf-8');
+/**
+ * TODO (imlucas) https://github.com/imlucas/mci-trigger/ could be really helpful here :)
+ */
 
-    cli.debug(`execFile stdout is:\n${msg}`);
-    let m = new RegExp('Link \: https\:\/\/evergreen.mongodb.com\/patch\/(.*)').exec(msg);
+/**
+ * TODO (imlucas) When `mongodb-js-ci` successfully completes a run,
+ * if `process.env.TRAVIS` and `exists(`pwd`/.evergreen.yml)`,
+ * submit a new a patch build for this project:
+ * evergreen patch --project=#{detect project name} --yes --finalize\
+ *   --description="#{most recent commit message}" --variants=all
+ */
 
-    if (!m) return null;
+/**
+ * TODO (imlucas): Support reading from package.json ->
+ * autogenerating `.evergreen.yml` for project:
+ *
+ * ```json
+ * {
+ * "evergreen": {
+ *     "project": "scout-server"
+ *   }
+ * }
+ * ```
+ */
 
-    let _id = m[1];
-    cli.debug(`extracted patch _id ${_id}`);
-    const url = `https://evergreen.mongodb.com/version/${_id}`;
-
-    cli.debug(`opening url ${url}`);
-    opn(url);
-  })
-  .catch(cli.abortIfError.bind(cli));
+/**
+ * TODO (imlucas) Wrap client binary calls so output is pretty and actually useful,
+ * e.g. `WHY IS IT SO HARD TO ADD HUMAN OPTIONS LIKE --open?`
+ */
+setup().then(evergreen.exec).then(function(res) {
+  cli.debug('response from cli:', res);
+  if (res.url) {
+    cli.debug('opening %s in browser', res.url);
+    opn(res.url);
+  }
+}).catch((err) => cli.abortIfError(err));

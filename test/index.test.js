@@ -7,22 +7,22 @@ const fs = require('fs');
 const path = require('path');
 
 describe('evergreen', () => {
-  describe('client', () => {
+  describe('cli', () => {
     describe('url', () => {
       it('should return the right download URL for `darwin`', () => {
-        assert.equal(evergreen.client.url('darwin'),
+        assert.equal(evergreen.getCliUrl('darwin'),
           'https://s3.amazonaws.com/mciuploads/mci/cli/mci_osx_client_'
           + '56310520e80db964c0bfe0b3f0bb81f0f6238f67_16_02_16_00_59_07/evergreen'
         );
       });
       it('should return the right download URL for `linux`', () => {
-        assert.equal(evergreen.client.url('linux'),
+        assert.equal(evergreen.getCliUrl('linux'),
           'https://s3.amazonaws.com/mciuploads/mci/cli/mci_ubuntu_client_'
           + '56310520e80db964c0bfe0b3f0bb81f0f6238f67_16_02_16_00_59_07/evergreen'
         );
       });
       it('should return the right download URL for `win32`', () => {
-        assert.equal(evergreen.client.url('win32'),
+        assert.equal(evergreen.getCliUrl('win32'),
           'https://s3.amazonaws.com/mciuploads/mci/cli/mci_windows_64_client_'
           + '56310520e80db964c0bfe0b3f0bb81f0f6238f67_16_02_16_00_59_07/evergreen.exe'
         );
@@ -30,32 +30,27 @@ describe('evergreen', () => {
     });
 
     describe('download', () => {
-      it('should download the binary for `darwin`', () => {
-        var binary = path.join(evergreen.client.dest, 'evergreen');
-        return evergreen.client.download('darwin').then( () => {
-          assert(fs.existsSync(binary));
-          fs.unlinkSync(binary);
-        });
+      evergreen.CLI_DIRECTORY = path.join(__dirname, 'cli-binaries');
+      function shouldHaveCliBinary(done) {
+        return function(bin) {
+          fs.exists(bin, function(_exists) {
+            assert(_exists, bin);
+            fs.unlink(bin, done);
+          });
+        };
+      }
+
+      it('should download the binary for `darwin`', function(done) {
+        evergreen.downloadCliBinary('darwin')
+          .then(shouldHaveCliBinary(done));
       });
-      it('should download the binary for `linux`', () => {
-        // if (process.env.TRAVIS) {
-        //   return this.skip();
-        // }
-        var binary = path.join(evergreen.client.dest, 'evergreen');
-        return evergreen.client.download('linux').then( () => {
-          assert(fs.existsSync(binary));
-          fs.unlinkSync(binary);
-        });
+      it('should download the binary for `linux`', function(done) {
+        evergreen.downloadCliBinary('linux')
+          .then(shouldHaveCliBinary(done));
       });
-      it('should download the binary for `win32`', () => {
-        // if (process.env.TRAVIS) {
-        //   return this.skip();
-        // }
-        var binary = path.join(evergreen.client.dest, 'evergreen.exe');
-        return evergreen.client.download('win32').then( () => {
-          assert(fs.existsSync(binary));
-          fs.unlinkSync(binary);
-        });
+      it('should download the binary for `win32`', function(done) {
+        evergreen.downloadCliBinary('win32')
+          .then(shouldHaveCliBinary(done));
       });
     });
   });

@@ -1,22 +1,24 @@
 'use strict';
 
 /* eslint no-sync:0 */
-const Promise = require('bluebird');
+const pify = require('pify');
+const execFile = pify(require('child_process').execFile);
 const path = require('path');
-const exists = (src) => {
-  return new Promise((resolve) => {
-    require('fs').exists(src, resolve);
-  });
-};
+const fs = require('fs');
+const existsSync = fs.existsSync;
+const write = pify(fs.writeFile);
 
-const existsSync = require('fs').existsSync;
 const untildify = require('untildify');
-const mkdirp = Promise.promisify(require('mkdirp'));
-const Download = require('download');
+const download = require('download');
+
 const pkg = require('./package.json');
 const debug = require('debug')('evergreen');
 
-let normalize = (platform) => {
+const exists = pify(fs.exists);
+const chmod = pify(fs.chmod);
+const mkdirp = pify(require('mkdirp'));
+
+function normalize(platform) {
   if (!platform) {
     platform = process.platform;
   }
@@ -29,22 +31,37 @@ let normalize = (platform) => {
     platform = 'ubuntu';
   }
   return platform;
-};
+}
 
-let bin = (name, platform) => {
+function bin(filename, platform) {
   if (platform === 'windows_64') {
-    return name + '.exe';
+    return `${filename}.exe`;
   }
-  return name;
-};
+  return filename;
+}
 
-exports = {
-  client: {}
-};
+exports.CONFIG_PATH = untildify('~/.evergreen.yml');
 
-exports.client._dest = () => {
-  if (process.env.EVERGREEN_CLIENT_DEST) {
-    return untildify(process.env.EVERGREEN_CLIENT_DEST);
+/**
+ * The current version of the evergreen cli.
+ * @api public
+ */
+exports.CLI_VERSION = [
+  pkg.evergreen.cli.sha,
+  pkg.evergreen.cli.timestamp
+].join('_');
+
+debug('CLI version is `%s`', exports.CLI_VERSION);
+
+/**
+ * Directory the cli binaries will be downloaded to.
+ *
+ * @returns {String}
+ * @api public
+ */
+exports.getCliDirectory = function() {
+  if (process.env.EVERGREEN_CLI_DIRECTORY) {
+    return untildify(process.env.EVERGREEN_CLI_DIRECTORY);
   }
 
   if (process.cwd() === __dirname) {
@@ -58,97 +75,137 @@ exports.client._dest = () => {
     return untildify('~/.evergreen');
   }
 
-  // We're probably a devDependency so keep client builds local
+  // We're probably a devDependency so keep cli binaries local
   // which is great for taking advantage of Travis and Evergreen
   // directory caching between builds.
   return path.join(pkgDirectory, '.evergreen');
 };
 
+exports.CLI_DIRECTORY = exports.getCliDirectory();
+debug('cli binaries will be downloaded to `%s`', exports.CLI_DIRECTORY);
 
 /**
- * Where the client binaries will be downloaded to.
- * @api public
- */
-exports.client.dest = exports.client._dest();
-debug('client binaries will be downloaded to `%s`', exports.client.dest);
-
-/**
- * The current version of the evergreen client.
- * @api public
- */
-exports.client.version = `${pkg.evergreen.client.sha}_${pkg.evergreen.client.timestamp}`;
-debug('client version is `%s`', exports.client.version);
-
-/**
- * What is the S3 URL I should use to download the client binary?
+ * What is the S3 URL I should use to download the cli binary?
  *
  * @param {String} [platform] - [Default: `process.platform`].
- * @param {String} [version] - Evergreen client version string
- *   [Default: `require('evergreen').client.version`].
+ * @param {String} [version] - Evergreen cli version string
+ *   [Default: `require('evergreen').CLI_VERSION`].
  * @return {String} - The URL
  * @api public
  */
-exports.client.url = (platform, version) => {
-  version = version || exports.client.version;
+exports.getCliUrl = function(platform, version) {
+  version = version || exports.CLI_VERSION;
 
   return `https://s3.amazonaws.com/mciuploads/mci/cli/mci_`
     + `${normalize(platform)}_client_${version}/${bin('evergreen', normalize(platform))}`;
 };
 
-exports.client.binary = path.join(exports.client.dest,
-  bin('evergreen', normalize(process.platform)));
-debug(`client binary will be located at ${exports.client.binary}`);
+exports.getCliPath = function(platform, directory) {
+  platform = normalize(platform || process.platform);
+  directory = directory || exports.CLI_DIRECTORY;
+
+  return path.join(directory, bin('evergreen', platform));
+};
+
+exports.CLI_PATH = exports.getCliPath();
+debug(`cli binary will be located at ${exports.CLI_PATH}`);
 
 
-function downloadIfNeeded(options) {
-  debug('checking if download needed', options);
-  return exists(options.dest)
-    .then( (_exists) => {
+function downloadIfNeeded(platform, version) {
+  platform = normalize(platform);
+  version = version || exports.CLI_VERSION;
+
+  const url = exports.getCliUrl(platform, version);
+  const dest = exports.getCliPath(platform);
+
+  debug('checking if download needed', {url: url, dest: dest});
+  return new Promise(function(resolve, reject) {
+    fs.exists(dest, function(_exists) {
       if (_exists) {
-        debug(`already have ${options.dest}`);
-        return options.dest;
+        debug('already have %s', dest);
+        return resolve(dest);
       }
-      debug(`downloading ${options.url} to ${options.dest}...`);
-
-      return new Promise((resolve, reject) => {
-        new Download(options)
-          .get(options.url)
-          .rename(options.filename)
-          .dest(exports.client.dest)
-          .run((err) => {
-            debug('download complete', err);
-            if (err) return reject(err);
-            resolve(options.dest);
-          });
+      debug('downloading...', {
+        url: url,
+        dest: dest
       });
+
+      return download(url).then(data => {
+        debug('writing', dest);
+        return write(dest, data);
+      })
+      .then(function() {
+        debug('chmod', dest);
+        return chmod(dest, '755');
+      })
+      .then(function() {
+        resolve(dest);
+      })
+      .catch(reject);
     });
+  });
 }
 
 /**
- * Download the client binary from S3 if we don't already have it.
+ * Download the cli binary from S3 if we don't already have it.
  *
  * @param {String} [platform] - [Default: `process.platform`].
- * @param {String} [version] - Evergreen client version string
- *   [Default: `require('evergreen').client.version`].
+ * @param {String} [version] - Evergreen cli version string
+ *   [Default: `require('evergreen').CLI_VERSION`].
  * @return {Promise}
  * @api public
  */
-exports.client.download = function(platform, version) {
-  platform = normalize(platform);
-  version = version || exports.client.version;
-
-  const url = exports.client.url(platform, version);
-  const filename = bin('evergreen', platform);
-  const options = {
-    mode: '755',
-    url: url,
-    filename: filename,
-    dest: path.join(exports.client.dest, filename)
-  };
-
-  return mkdirp(exports.client.dest)
-    .then(() => downloadIfNeeded(options));
+exports.downloadCliBinary = function(platform, version) {
+  return mkdirp(exports.CLI_DIRECTORY).then(function() {
+    return downloadIfNeeded(platform, version);
+  });
 };
 
+/**
+ * @typedef {Object} PatchResponse
+ * @property {String} method
+ * @property {String} patch_id
+ * @property {String} url
+ */
+const PATCH_URL_RE = new RegExp('Link \: https\:\/\/evergreen.mongodb.com\/patch\/(.*)');
+
+/**
+ * @param {Buffer} stdout
+ * @returns {Promise.PatchResponse}
+ * @api private
+ */
+exports.parseCliOutput = function(stdout) {
+  return new Promise(function(resolve) {
+    debug('parsing cli output', stdout.toString('utf-8'));
+
+    const res = {};
+    const patchUrlMatches = PATCH_URL_RE.exec(stdout.toString('utf-8'));
+    if (patchUrlMatches) {
+      Object.assign(res, {
+        method: 'patch',
+        patch_id: patchUrlMatches[1],
+        url: `https://evergreen.mongodb.com/version/${patchUrlMatches[1]}`
+      });
+    }
+    debug('parsed cli output is', res);
+    resolve(res);
+  });
+};
+
+/**
+ * Run the evergreen cli binary.
+ *
+ * @return {Promise} Parsed cli output
+ * @api public
+ */
+exports.exec = function() {
+  const args = process.argv.slice(2);
+  debug('running', {
+    bin: exports.CLI_PATH,
+    args: args
+  });
+  return execFile(exports.CLI_PATH, args, {stdio: 'inherit'})
+    .then(exports.parseCliOutput);
+};
 
 module.exports = exports;
