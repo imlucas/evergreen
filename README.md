@@ -1,3 +1,7 @@
+:warning: Deprecated. Please use the official cli https://evergreen.mongodb.com
+
+---
+
 # evergreen [![travis][travis_img]][travis_url] [![npm][npm_img]][npm_url]
 
 > Dead simple way to use [Evergreen][evergreen], MongoDB's Continuous Build Platform.
